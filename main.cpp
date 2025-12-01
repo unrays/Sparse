@@ -11,7 +11,7 @@
 #include <tuple>
 #include <cassert>
 
-
+//first/second version, not very good, scroll down to see the real one 
 template<typename T>
 class DenseArray {
 public:
