@@ -146,6 +146,7 @@ private:
     //sur la case .size() - 1 (dernière).
 };
 
+// not yet, theres a better version
 template<typename T>
 struct Sparse3 {
 private:
