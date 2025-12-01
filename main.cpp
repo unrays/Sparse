@@ -10,8 +10,9 @@
 #include <type_traits>
 #include <tuple>
 #include <cassert>
+#include <optional>
 
-//first/second version, not very good, scroll down to see the real one 
+
 template<typename T>
 class DenseArray {
 public:
@@ -146,10 +147,16 @@ private:
 };
 
 template<typename T>
-struct Sparse {
+struct Sparse3 {
 private:
     static constexpr std::size_t DEFAULT_DENSE_CAPACITY = 2048;
     static constexpr std::size_t DEFAULT_SPARSE_CAPACITY = 16384;
+
+    // EN GROS, LE SPARSE NE DEVRAIS JAMAIS FAIRE CRASH LE PROGRAMME
+    // FAIRE UTILISE STD::OPTIONAL ET RETOURNER SI LE ID EST TROP GRAND
+    // NE JAMAIS RESIZE LE TABLEAU SI LE ID EST TROP GRAND, RETIRER LA 
+    // LIGNE QUI FAIT CA 
+    // if (entity_id >= sparse_.size()) sparse_.resize(entity_id + 1, SIZE_MAX);
 
     inline constexpr void check_valid_entity_id(std::size_t entity_id) const {
         if (!is_valid_entity_id(entity_id)) 
@@ -163,7 +170,7 @@ private:
     }
 
 public:
-    Sparse(std::size_t init_dense_capacity = DEFAULT_DENSE_CAPACITY,
+    Sparse3(std::size_t init_dense_capacity = DEFAULT_DENSE_CAPACITY,
            std::size_t init_sparse_capacity = DEFAULT_SPARSE_CAPACITY) {
         dense_.reserve(init_dense_capacity);
         binding_.reserve(init_dense_capacity);
@@ -171,11 +178,11 @@ public:
         sparse_.resize(init_sparse_capacity, SIZE_MAX);
     }
 
-    Sparse(const Sparse&) = default;
-    Sparse& operator=(const Sparse&) = default;
-    Sparse(Sparse&&) noexcept = default;
-    Sparse& operator=(Sparse&&) noexcept = default;
-    ~Sparse() = default;
+    Sparse3(const Sparse3&) = default;
+    Sparse3& operator=(const Sparse3&) = default;
+    Sparse3(Sparse3&&) noexcept = default;
+    Sparse3& operator=(Sparse3&&) noexcept = default;
+    ~Sparse3() = default;
 
 public:
     template<typename U>
@@ -244,12 +251,12 @@ public:
     auto end() const noexcept { return dense_.end(); }
 
 public:
-    T& operator[](std::size_t entity_id) noexcept {
+    T& operator[](std::size_t entity_id) {
         check_valid_entity_id(entity_id);
         return dense_[sparse_[entity_id]];
     }
 
-    const T& operator[](std::size_t entity_id) const noexcept {
+    const T& operator[](std::size_t entity_id) const {
         check_valid_entity_id(entity_id);
         return dense_[sparse_[entity_id]];
     }
@@ -263,7 +270,171 @@ private:
     std::vector<std::size_t> sparse_; // contient un entity_id -> component_id
     std::vector<std::size_t> binding_; // contient un composante_id -> entity_id
     std::vector<T> dense_;  //contient un component_id -> component (T)
-}
+};
+
+template<typename T>
+struct Sparse {
+private:
+    static constexpr std::size_t DEFAULT_DENSE_CAPACITY = 2048;
+    static constexpr std::size_t DEFAULT_SPARSE_CAPACITY = 16384;
+
+    inline void error_not_enough_capacity(const std::string& context, size_t required, size_t actual) {
+        std::cerr << "[ERROR] " << context
+                  << " | Required size: " << required
+                  << ", Actual size: " << actual << std::endl;
+    }
+
+    inline constexpr bool is_valid_entity_id(std::size_t entity_id) const {
+        return entity_id < sparse_.size();
+    }
+
+public:
+    Sparse(std::size_t init_dense_capacity = DEFAULT_DENSE_CAPACITY,
+        std::size_t init_sparse_capacity = DEFAULT_SPARSE_CAPACITY) {
+        dense_.reserve(init_dense_capacity);
+        binding_.reserve(init_dense_capacity);
+        sparse_.reserve(init_sparse_capacity);
+        sparse_.resize(init_sparse_capacity, SIZE_MAX);
+    }
+
+    Sparse(const Sparse&) = default;
+    Sparse& operator=(const Sparse&) = default;
+    Sparse(Sparse&&) noexcept = default;
+    Sparse& operator=(Sparse&&) noexcept = default;
+    ~Sparse() = default;
+
+public:
+    template<typename U>
+    void insert(std::size_t entity_id, U&& component) noexcept {
+        if (!is_valid_entity_id(entity_id)) {
+            error_not_enough_capacity(
+                "Sparse vector too small",
+                entity_id + 1,
+                sparse_.size()
+            ); return;
+        }
+
+        dense_.push_back(std::forward<U>(component));
+        std::size_t component_index = dense_.size() - 1;
+
+        sparse_[entity_id] = component_index;
+        binding_.push_back(entity_id);
+    }
+
+    void emplace_default(std::size_t entity_id) noexcept {
+        if (!is_valid_entity_id(entity_id)) {
+            error_not_enough_capacity(
+                "Sparse vector too small",
+                entity_id + 1,
+                sparse_.size()
+            ); return;
+        }
+
+        dense_.emplace_back();
+        std::size_t component_index = dense_.size() - 1;
+
+        sparse_[entity_id] = component_index;
+        binding_.push_back(entity_id);
+    }
+
+    void remove_swap(std::size_t entity_id) {
+        if (!is_valid_entity_id(entity_id)) {
+            error_not_enough_capacity(
+                "Sparse vector too small",
+                entity_id + 1,
+                sparse_.size()
+            ); return;
+        }
+
+        std::size_t component_index = sparse_[entity_id];
+        std::size_t last_component_index = dense_.size() - 1;
+        std::size_t last_entity_id = binding_[last_component_index];
+
+        std::swap(dense_[component_index], dense_[dense_.size() - 1]);
+        dense_.pop_back();
+
+        std::swap(binding_[component_index], binding_[last_component_index]);
+        binding_.pop_back();
+
+        sparse_[last_entity_id] = component_index;
+        sparse_[entity_id] = SIZE_MAX;
+    }
+
+public:
+    bool contains(std::size_t entity_id) const {
+        return is_valid_entity_id(entity_id) && sparse_[entity_id] != SIZE_MAX;
+    }
+
+    std::size_t count() const noexcept { return dense_.size(); }
+    std::size_t capacity() const noexcept { return sparse_.capacity(); }
+    std::size_t is_empty() const noexcept { return sparse_.empty(); }
+
+    void clear_sparse() noexcept { sparse_.clear(); }
+    void clear_dense() noexcept { dense_.clear(); }
+    void clear_binding() noexcept { binding_.clear(); }
+
+    void reserve(std::size_t new_capacity) noexcept { sparse_.reserve(new_capacity); }
+
+    void shrink_sparse_to_fit() noexcept { sparse_.shrink_to_fit(); }
+    void shrink_dense_to_fit() noexcept { dense_.shrink_to_fit(); }
+    void shrink_binding_to_fit() noexcept { binding_.shrink_to_fit(); }
+
+public:
+    auto begin() noexcept { return dense_.begin(); }
+    auto end() noexcept { return dense_.end(); }
+    auto begin() const noexcept { return dense_.begin(); }
+    auto end() const noexcept { return dense_.end(); }
+
+public:
+    std::optional<T&> operator[](std::size_t entity_id) noexcept {
+        if (!is_valid_entity_id(entity_id)) {
+            error_not_enough_capacity(
+                "Sparse vector too small",
+                entity_id + 1,
+                sparse_.size()
+            ); return std::nullopt;
+        }
+        return dense_[sparse_[entity_id]];
+    }
+
+    const std::optional<T&> operator[](std::size_t entity_id) const noexcept {
+        if (!is_valid_entity_id(entity_id)) {
+            error_not_enough_capacity(
+                "Sparse vector too small",
+                entity_id + 1,
+                sparse_.size()
+            ); return std::nullopt;
+        }
+        return dense_[sparse_[entity_id]];
+    }
+
+    std::optional<T&> get(std::size_t entity_id) noexcept & {
+        if (!is_valid_entity_id(entity_id)) {
+            error_not_enough_capacity(
+                "Sparse vector too small",
+                entity_id + 1,
+                sparse_.size()
+            ); return std::nullopt;
+        }
+        return dense_[sparse_[entity_id]];
+    }
+
+    std::optional<const T&> get(std::size_t entity_id) const noexcept & {
+        if (!is_valid_entity_id(entity_id)) {
+            error_not_enough_capacity(
+                "Sparse vector too small",
+                entity_id + 1,
+                sparse_.size()
+            ); return std::nullopt;
+        }
+        return dense_[sparse_[entity_id]];
+    }
+
+private:
+    std::vector<std::size_t> sparse_; // contient un entity_id -> component_id
+    std::vector<std::size_t> binding_; // contient un composante_id -> entity_id
+    std::vector<T> dense_;  //contient un component_id -> component (T)
+};
 
 
 class Object {
