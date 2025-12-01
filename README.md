@@ -1,0 +1,140 @@
+*Hello, this is my third and first successful attempt at coding and designing a small sparse set. On Sunday, November 30, 2025, I challenged myself yesterday to learn how to design and code a sparse set from scratch, with minimal documentation. A bit of a "from scratch" approach, but we'll guide you. I'm not reinventing the concept; the sparse set is a very popular and powerful algorithm. I've simply imagined my own version of it. It probably resembles other implementations given the uniqueness of the algorithm and the system; there aren't a hundred different ways to implement it. Basically, I made two versions before arriving at this one. The first consisted of a Dense class and a Sparse class that communicated with each other. This isn't the best idea, although valid; it breaks the concept itself in such a way that it literally forces you to zigzag with the data between the two classes. I don't need to tell you that this is bad, especially for an ECS system. The second one was very similar, in the same vein, we'll say. It was noticeably more complex and included SFINAE and Variadic logic, just enough to make any template meta-programming wizard reading my code do backflips :)*
+
+*More seriously, these iterations were good, but from a performance and conceptual standpoint, they weren't quite right. So, this evening, around 7 PM (an hour and a half ago), I decided to redo everything, but this time trying to have as much locality of code and information as possible. As a result, you can take a look at it; I worked from scratch, rewriting all the logic and ensuring the highest possible code quality. Also, during this project, I learned a lot about "pro" class and object design, such as the rule of 5 (or 7, it seems to increase exponentially over the years lmao) and about function overloading for r and l values ​​(especially by combining them with template<typename U> and using good old std::forward<U>(arg)). Anyway, I've learned quite a bit about the subject, I'm super happy with the result, especially since algorithms are my weakness and I'm really, really bad at it. I still managed to implement a sparse set and I'll be able to show it to my friends tomorrow :)*
+
+*Finally, I intend to implement this code as the foundation of my upcoming large ECS project, "Exotic," and I wanted to post it here for archiving purposes. It would be a shame to lose such an important piece of my learning within the enormous codebase that this project will be. Thank you and have a good day.*
+
+```cpp
+// Copyright (c) November 2025 Félix-Olivier Dumas. All rights reserved.
+// Licensed under the terms described in the LICENSE file.
+
+#pragma once
+#include <iostream>
+#include <vector>
+#include <chrono>
+#include <cstdint>
+#include <stdexcept>
+#include <type_traits>
+#include <tuple>
+#include <cassert>
+
+template<typename T>
+struct SparseSet {
+private:
+    static constexpr std::size_t DEFAULT_DENSE_CAPACITY = 2048;
+    static constexpr std::size_t DEFAULT_SPARSE_CAPACITY = 16384;
+
+    inline constexpr void check_valid_entity_id(std::size_t entity_id) const {
+        if (!is_valid_entity_id(entity_id)) 
+            throw std::out_of_range(
+                std::string("Entity ID ") + std::to_string(entity_id) +
+                " out of bounds (max " + std::to_string(sparse_.size() - 1) + ")"
+            );
+    }
+    inline constexpr bool is_valid_entity_id(std::size_t entity_id) const {
+        return entity_id < sparse_.size();
+    }
+
+public:
+    Sparse(std::size_t init_dense_capacity = DEFAULT_DENSE_CAPACITY,
+           std::size_t init_sparse_capacity = DEFAULT_SPARSE_CAPACITY) {
+        dense_.reserve(init_dense_capacity);
+        binding_.reserve(init_dense_capacity);
+        sparse_.reserve(init_sparse_capacity);
+        sparse_.resize(init_sparse_capacity, SIZE_MAX);
+    }
+
+    Sparse(const Sparse&) = default;
+    Sparse& operator=(const Sparse&) = default;
+    Sparse(Sparse&&) noexcept = default;
+    Sparse& operator=(Sparse&&) noexcept = default;
+    ~Sparse() = default;
+
+public:
+    template<typename U>
+    void insert(std::size_t entity_id, U&& component) noexcept {
+        dense_.push_back(std::forward<U>(component));
+        std::size_t component_index = dense_.size() - 1;
+
+        if (entity_id >= sparse_.size())
+            sparse_.resize(entity_id + 1, SIZE_MAX);
+
+        sparse_[entity_id] = component_index;
+        binding_.push_back(entity_id);
+    }
+
+    void emplace_default(std::size_t entity_id) noexcept {
+        dense_.emplace_back();
+        std::size_t component_index = dense_.size() - 1;
+
+        if (entity_id >= sparse_.size())
+            sparse_.resize(entity_id + 1, SIZE_MAX);
+
+        sparse_[entity_id] = component_index;
+        binding_.push_back(entity_id);
+    }
+
+    void remove_swap(std::size_t entity_id) {
+        check_valid_entity_id(entity_id);
+
+        std::size_t component_index = sparse_[entity_id];
+        std::size_t last_component_index = dense_.size() - 1;
+        std::size_t last_entity_id = binding_[last_component_index];
+
+        std::swap(dense_[component_index], dense_[dense_.size() - 1]);
+        dense_.pop_back();
+
+        std::swap(binding_[component_index], binding_[last_component_index]);
+        binding_.pop_back();
+
+        sparse_[last_entity_id] = component_index;
+        sparse_[entity_id] = SIZE_MAX;
+    }
+
+public:
+    bool contains(std::size_t entity_id) const {
+        return is_valid_entity_id(entity_id) && sparse_[entity_id] != SIZE_MAX;
+    }
+
+    std::size_t count() const noexcept { return dense_.size(); }
+    std::size_t capacity() const noexcept { return sparse_.capacity(); }
+    std::size_t is_empty() const noexcept { return sparse_.empty(); }
+
+    void clear_sparse() noexcept { sparse_.clear(); }
+    void clear_dense() noexcept { dense_.clear(); }
+    void clear_binding() noexcept { binding_.clear(); }
+
+    void reserve(std::size_t new_capacity) noexcept { sparse_.reserve(new_capacity); }
+
+    void shrink_sparse_to_fit() noexcept { sparse_.shrink_to_fit(); }
+    void shrink_dense_to_fit() noexcept { dense_.shrink_to_fit(); }
+    void shrink_binding_to_fit() noexcept { binding_.shrink_to_fit(); }
+
+public:
+    auto begin() noexcept { return dense_.begin(); }
+    auto end() noexcept { return dense_.end(); }
+    auto begin() const noexcept { return dense_.begin(); }
+    auto end() const noexcept { return dense_.end(); }
+
+public:
+    T& operator[](std::size_t entity_id) noexcept {
+        check_valid_entity_id(entity_id);
+        return dense_[sparse_[entity_id]];
+    }
+
+    const T& operator[](std::size_t entity_id) const noexcept {
+        check_valid_entity_id(entity_id);
+        return dense_[sparse_[entity_id]];
+    }
+
+    T& get(std::size_t entity_id) {
+        check_valid_entity_id(entity_id);
+        return dense_[sparse_[entity_id]];
+    }
+
+private:
+    std::vector<std::size_t> sparse_; // contient un entity_id -> component_id
+    std::vector<std::size_t> binding_; // contient un composante_id -> entity_id
+    std::vector<T> dense_;  //contient un component_id -> component (T)
+}
+```
