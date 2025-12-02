@@ -7,19 +7,6 @@
 *Moreover, this is the final project that concludes November, which was one of the most important months of my young programming career. During this month, I went from being an amateur C# programmer who understood absolutely nothing about optimization, design, hardcore C++ code, and above all, my beloved meta-programming template. I've successfully completed numerous projects like Apex, Harmony, Lumen, Catalyst, Wave, Exotic, and Sparse, which is the final project I've undertaken :) I've learned many other things such as sfinae, move semantics, smart pointers and how they work, the hardcore meta-programming template that I absolutely love, and many extremely important concepts about C++ and its best practices (just look at the code from a month ago; the difference is night and day). Now, let's say hello to December! Who knows what projects await me this month! In the meantime, I wish you a wonderful rest of the day and stay tuned for the new projects I'll be releasing :)*
 
 ```cpp
-// Copyright (c) November 2025 Félix-Olivier Dumas. All rights reserved.
-// Licensed under the terms described in the LICENSE file.
-
-#pragma once
-#include <iostream>
-#include <vector>
-#include <chrono>
-#include <cstdint>
-#include <stdexcept>
-#include <type_traits>
-#include <tuple>
-#include <cassert>
-
 template<typename T>
 struct Sparse {
 private:
@@ -32,7 +19,17 @@ private:
                   << ", Actual size: " << actual << std::endl;
     }
 
-    inline constexpr bool is_valid_entity_id(std::size_t entity_id) const {
+    inline void error_entity_has_no_component(std::size_t entity_id) {
+        std::cerr << "[ERROR] Entity " << entity_id
+                  << " does not have a component!" << std::endl;
+    }
+
+    inline void error_entity_already_has_component(std::size_t entity_id) {
+        std::cerr << "[ERROR] Entity " << entity_id
+            << " already has a component!" << std::endl;
+    }
+
+    inline constexpr bool is_valid_entity_id(std::size_t entity_id) const noexcept {
         return entity_id < sparse_.size();
     }
 
@@ -62,6 +59,11 @@ public:
             ); return;
         }
 
+        if (contains(entity_id)) {
+            error_entity_already_has_component(entity_id);
+            return;
+        }
+
         dense_.push_back(std::forward<U>(component));
         std::size_t component_index = dense_.size() - 1;
 
@@ -76,6 +78,11 @@ public:
                 entity_id + 1,
                 sparse_.size()
             ); return;
+        }
+
+        if (contains(entity_id)) {
+            error_entity_already_has_component(entity_id);
+            return;
         }
 
         dense_.emplace_back();
@@ -94,6 +101,11 @@ public:
             ); return;
         }
 
+        if (!contains(entity_id)) {
+            error_entity_has_no_component(entity_id);
+            return;
+        }
+           
         std::size_t component_index = sparse_[entity_id];
         std::size_t last_component_index = dense_.size() - 1;
         std::size_t last_entity_id = binding_[last_component_index];
@@ -134,48 +146,52 @@ public:
     auto end() const noexcept { return dense_.end(); }
 
 public:
-    std::optional<T&> operator[](std::size_t entity_id) noexcept {
-        if (!is_valid_entity_id(entity_id)) {
+    std::optional<T*> operator[](std::size_t entity_id) noexcept {
+        if (!is_valid_entity_id(entity_id) || sparse_[entity_id] == SIZE_MAX) {
             error_not_enough_capacity(
-                "Sparse vector too small",
+                "Sparse vector too small or entity has no component",
                 entity_id + 1,
                 sparse_.size()
-            ); return std::nullopt;
+            );
+            return std::nullopt;
         }
-        return dense_[sparse_[entity_id]];
+        return &dense_[sparse_[entity_id]];
     }
 
-    const std::optional<T&> operator[](std::size_t entity_id) const noexcept {
-        if (!is_valid_entity_id(entity_id)) {
+    const std::optional<T*> operator[](std::size_t entity_id) const noexcept {
+        if (!is_valid_entity_id(entity_id) || sparse_[entity_id] == SIZE_MAX) {
             error_not_enough_capacity(
-                "Sparse vector too small",
+                "Sparse vector too small or entity has no component",
                 entity_id + 1,
                 sparse_.size()
-            ); return std::nullopt;
+            );
+            return std::nullopt;
         }
-        return dense_[sparse_[entity_id]];
+        return &dense_[sparse_[entity_id]];
     }
 
-    std::optional<T&> get(std::size_t entity_id) noexcept & {
-        if (!is_valid_entity_id(entity_id)) {
+    std::optional<T*> get(std::size_t entity_id) & noexcept {
+        if (!is_valid_entity_id(entity_id) || sparse_[entity_id] == SIZE_MAX) {
             error_not_enough_capacity(
-                "Sparse vector too small",
+                "Sparse vector too small or entity has no component",
                 entity_id + 1,
                 sparse_.size()
-            ); return std::nullopt;
+            );
+            return std::nullopt;
         }
-        return dense_[sparse_[entity_id]];
+        return &dense_[sparse_[entity_id]];
     }
 
-    std::optional<const T&> get(std::size_t entity_id) const noexcept & {
-        if (!is_valid_entity_id(entity_id)) {
+    std::optional<const T*> get(std::size_t entity_id) const & noexcept {
+        if (!is_valid_entity_id(entity_id) || sparse_[entity_id] == SIZE_MAX) {
             error_not_enough_capacity(
-                "Sparse vector too small",
+                "Sparse vector too small or entity has no component",
                 entity_id + 1,
                 sparse_.size()
-            ); return std::nullopt;
+            );
+            return std::nullopt;
         }
-        return dense_[sparse_[entity_id]];
+        return &dense_[sparse_[entity_id]];
     }
 
 private:
