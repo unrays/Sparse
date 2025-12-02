@@ -7,6 +7,9 @@
 *Moreover, this is the final project that concludes November, which was one of the most important months of my young programming career. During this month, I went from being an amateur C# programmer who understood absolutely nothing about optimization, design, hardcore C++ code, and above all, my beloved meta-programming template. I've successfully completed numerous projects like Apex, Harmony, Lumen, Catalyst, Wave, Exotic, and Sparse, which is the final project I've undertaken :) I've learned many other things such as sfinae, move semantics, smart pointers and how they work, the hardcore meta-programming template that I absolutely love, and many extremely important concepts about C++ and its best practices (just look at the code from a month ago; the difference is night and day). Now, let's say hello to December! Who knows what projects await me this month! In the meantime, I wish you a wonderful rest of the day and stay tuned for the new projects I'll be releasing :)*
 
 ```cpp
+// Copyright (c) November 2025 Félix-Olivier Dumas. All rights reserved.
+// Licensed under the terms described in the LICENSE file.
+
 template<typename T>
 struct Sparse {
 private:
@@ -221,4 +224,21 @@ private:
     std::vector<std::size_t> reverse_; // contient un composante_id -> entity_id
     std::vector<T> dense_;  //contient un component_id -> component (T)
 };
+```
+
+```cpp
+// Copyright (c) November 2025 Félix-Olivier Dumas. All rights reserved.
+// Licensed under the terms described in the LICENSE file.
+
+template<typename T>
+struct is_index_type {
+    static constexpr bool value =
+        std::disjunction_v<
+            std::is_same<T, std::size_t>,
+            std::is_same<T, unsigned int>,
+            std::is_same<T, unsigned long>,
+            std::is_same<T, unsigned long long>
+        >;
+}; template<typename T>
+inline constexpr bool is_index_type_v = is_index_type<T>::value;
 ```
