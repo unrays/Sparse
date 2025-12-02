@@ -71,7 +71,13 @@ public:
         reverse_.push_back(entity_id);
     }
 
-    void emplace_default(std::size_t entity_id) noexcept {
+    template<typename... Ts, typename U>
+    auto batch_insert(Ts... entity_ids, const U& component) noexcept ->
+        std::enable_if_t<(is_index_type_v<Ts> && ...) && (sizeof...(Ts) > 0),
+    void> { (insert(entity_ids, component), ...); }
+
+    auto emplace_default(std::size_t entity_id) noexcept ->
+    std::enable_if_t<std::is_default_constructible_v<T>, void> {
         if (!is_valid_entity_id(entity_id)) {
             error_not_enough_capacity(
                 "Sparse vector too small",
@@ -91,6 +97,12 @@ public:
         sparse_[entity_id] = component_index;
         reverse_.push_back(entity_id);
     }
+
+    template<typename... Ts>
+    auto batch_emplace(Ts... entity_ids) noexcept -> 
+        std::enable_if_t<std::is_default_constructible_v<T>
+        && (is_index_type_v<Ts> && ...) && (sizeof...(Ts) > 0),        
+    void> { (emplace_default(entity_ids), ...); }
 
     void remove_swap(std::size_t entity_id) {
         if (!is_valid_entity_id(entity_id)) {
@@ -120,14 +132,24 @@ public:
         sparse_[entity_id] = SIZE_MAX;
     }
 
+    template<typename... Ts>
+    auto batch_remove_swap(Ts... entity_ids) noexcept ->
+        std::enable_if_t<((is_index_type_v<Ts>) && ...)
+        && (sizeof...(Ts) > 0), void> { (remove_swap(entity_ids), ...); }
+
 public:
     bool contains(std::size_t entity_id) const {
         return is_valid_entity_id(entity_id) && sparse_[entity_id] != SIZE_MAX;
     }
 
+    template<typename... Ts>
+    auto batch_contains(Ts... entity_ids) const noexcept ->
+        std::enable_if_t<(is_index_type_v<Ts> && ...)
+        && (sizeof...(Ts) > 0), bool> { return (contains(entity_ids) && ...); }
+
     std::size_t count() const noexcept { return dense_.size(); }
     std::size_t capacity() const noexcept { return sparse_.capacity(); }
-    std::size_t is_empty() const noexcept { return sparse_.empty(); }
+    std::size_t empty() const noexcept { return sparse_.empty(); }
 
     void clear_sparse() noexcept { sparse_.clear(); }
     void clear_dense() noexcept { dense_.clear(); }
