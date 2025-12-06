@@ -8,6 +8,8 @@
 
 *This message was written last night. In the meantime, I've reworked and done a final iteration to refine things and fix numerous issues concerning data integrity and fidelity. Finally, I took the opportunity to do what I love most: meta-programming templates wherever possible :) For your information, I probably spent an hour and a half more than initially planned! Well, I'm done talking now. You can now enjoy the fruits of three days of relentless work on algorithms that normally give me nightmares.*
 
+*I've finally reworked it again; I've lost count of the hours I've spent on it, I must be around 8-9*
+
 ```cpp
 // Copyright (c) December 2025 Félix-Olivier Dumas. All rights reserved.
 // Licensed under the terms described in the LICENSE file.
